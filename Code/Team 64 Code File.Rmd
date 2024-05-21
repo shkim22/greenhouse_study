@@ -1,0 +1,437 @@
+---
+title: "Team 64 Code File"
+output:
+  pdf_document: default
+  html_document: default
+date: "2023-04-02"
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#load packages
+library(dplyr)
+library(corrplot)
+library(ggpubr)
+library(GGally)
+library(ggcorrplot)
+library(ggplot2)
+library(ggrepel)
+library(lubridate)
+library(caret)
+library(glmnet)
+library(car)
+library(pls)
+```
+
+```{r}
+set.seed(10)
+#Load data
+data <- read.csv("combinedFINAL.csv", header = TRUE)
+
+#Convert Year column to date format
+data$Year <- mdy(data$Year)
+
+head(data)
+```
+
+```{r}
+#Create correlation plot
+
+#Modify data to remove ID variables
+data2<-data
+data2<-data2[-c(2:4)]
+
+#Create correlation matrix
+corr<- cor(data2)
+
+#Create plot
+ggcorrplot(corr, hc.order = TRUE, type = "full", lab = TRUE, lab_size=2,tl.cex=8,  colors = c("brown", "white", "dark green"))
+
+```
+
+```{r}
+#View summary of data
+options(scipen=999)
+summary(data[,c(5:16)] )  
+
+#Plot population vs. GHG (with and without LUCF)
+scatterplot<-plot(data2$population, data2$GHG_without_LUCF, main="Population and GHG w/o LUCF",
+   xlab="Population", ylab="GHG without LUCF (CO2 Equivalents) ")
+
+scatterplot2<-plot(data2$population, data2$GHG_with_LUCF, main="Population and GHG w/ LUCF",
+   xlab="Population", ylab="GHG with LUCF (CO2 Equivalents) ")
+```
+
+```{r}
+#Identify top 10 average emitters
+
+#Rank countries by top emitters (without LUCF)
+data3<- data %>% group_by(Country_Name) %>% summarise_at(vars(population,GHG_without_LUCF), list(name=mean))
+colnames(data3)[2:3] =c("Avg_Population","Avg_GHG_without_LUCF")
+data3 <- data3[with(data3,order(-Avg_GHG_without_LUCF)),]
+data3 <- data3[1:10,]
+select(data3,Country_Name, Avg_GHG_without_LUCF)
+
+#Rank countries by top emitters (with LUCF)
+data3a<- data %>% group_by(Country_Name) %>% summarise_at(vars(population,GHG_with_LUCF), list(name=mean))
+colnames(data3a)[3] ="Avg_GHG_with_LUCF"
+data3a <- data3a[with(data3a,order(-Avg_GHG_with_LUCF)),]
+data3a <- data3a[1:10,]
+select(data3a,Country_Name, Avg_GHG_with_LUCF)
+```
+
+```{r}
+#Plot top 10 average emitters in a time series graph by Pop and GHG
+top10<-c(data3$Country_Name)
+
+#Filter data for top 10 countries only
+data_label<- data %>% group_by(Country_Name) %>% filter(Country_Name %in% top10)
+
+#Create data labels for graph
+data_label$label <- NA
+data_label$label[which(data_label$Year == max(data_label$Year))] <- data_label$Country_Name[which(data_label$Year == max(data_label$Year))]
+
+#Draw top 20 plot with labels for GHG without LUCF
+top10plot<-ggplot(data_label, aes(x=Year, y=GHG_without_LUCF, group=Country_Name)) +
+  geom_line(aes(colour=Country_Name)) +
+  geom_label_repel(aes(label = label), size=3, max.overlaps=10, nudge_x =0.5, hjust = "left",direction="x",na.rm = TRUE) + 
+  theme(legend.position = "bottom") +
+  ggtitle("Top 10 Emitters: GHG emissions without LUCF (1990-2019)")
+top10plot
+
+#Draw top 20 plot with labels for population
+top10plot2<-ggplot(data_label, aes(x=Year, y=population, group=Country_Name)) +
+  geom_line(aes(colour=Country_Name)) +
+  geom_label_repel(aes(label = label), size=3, max.overlaps=4, nudge_x =0.5,na.rm = TRUE) + 
+  theme(legend.position = "bottom") +
+  ggtitle("Top 10 Emitters: Population (1990-2019)")
+top10plot2
+
+#Draw top 20 plot with labels for GHG
+top10plot3<-ggplot(data_label, aes(x=Year, y=GHG_with_LUCF, group=Country_Name)) +
+  geom_line(aes(colour=Country_Name)) +
+  geom_label_repel(aes(label = label), size=3, max.overlaps=5, nudge_x =0.5, hjust = "left",direction="x",na.rm = TRUE) + 
+  theme(legend.position = "bottom") +
+  ggtitle("Top 10 Emitters: GHG emissions with LUCF (1990-2019)")
+top10plot3
+
+```
+
+```{r}
+#Data manipulations for models
+options(scipen = 0)
+
+#Drop extra ID columns from the dataset
+data4<-data
+data4<-data4[-c(1,2,4)]
+
+#The below line scales the independent variables:
+data4 <-data4 %>% mutate_at(-c(1,11,13), funs(c(scale(.))))
+head(data4)
+
+```
+
+```{r}
+#Begin linear regression modeling
+#Create 2 datasets for regressions: with and without LUCF Data
+GHGdata<-subset(data4, select = -c(GHG_with_LUCF))
+GHGLUCFdata <- subset(data4, select = -c(GHG_without_LUCF))
+
+set.seed(123)
+#Creating train/test datasets 1: GHG without LUCF
+random1 <- createDataPartition(GHGdata$GHG_without_LUCF,p = 0.8, list = FALSE)
+trainingdata1<- GHGdata[random1,]
+testingdata1<-GHGdata[-random1,]
+train1x<-subset(trainingdata1,select=-c(GHG_without_LUCF))
+train1y<-subset(trainingdata1,select=GHG_without_LUCF)
+test1x<-subset(testingdata1, select=-c(GHG_without_LUCF))
+test1y<-subset(testingdata1, select=GHG_without_LUCF)
+
+#Creating train/test datasets 2: GHG with LUCF
+random2 <- createDataPartition(GHGLUCFdata$GHG_with_LUCF,p = 0.8, list = FALSE)
+trainingdata2<- GHGLUCFdata[random2,]
+testingdata2<-GHGLUCFdata[-random2,]
+
+#Creating aggregate data for global model (for observation purposes only, not cross-validating)
+data5<-data
+data5<-data5[-c(1,2)]
+data5<- data5 %>% group_by(Date = Year) %>%
+  summarise(
+    Country_Count = length(unique(Country_Name)),
+    Global_GHG = sum(as.numeric(GHG_without_LUCF)),
+    Global_population = sum(as.numeric(population)),
+    Global_GDP = sum(as.numeric(GDP))
+  )
+
+```
+
+```{r}
+#Build models and view summaries:
+options(scipen=0)
+#GHG_with_LUCF
+model1<-lm(GHG_without_LUCF~.,data=trainingdata1)
+summary(model1)
+
+#noted that population is coming up as not significant, probably because of high correlation with Labor force. Removed labor force
+model1a<-lm(GHG_without_LUCF~Country_Name+age_dependency_ratio+agricultural_land+fertility_rate+GDP+life_expectancy+natural_resources_rents+energy_consumption_per_capita+population+deaths_air_pollute,data=trainingdata1)
+summary(model1a)
+
+model1b<-lm(GHG_without_LUCF~labor_force+age_dependency_ratio+agricultural_land+fertility_rate+GDP+life_expectancy+natural_resources_rents+energy_consumption_per_capita+population+deaths_air_pollute,data=trainingdata1)
+summary(model1b)
+
+#GHG_with_LUCF
+model2<-lm(GHG_with_LUCF~.,data=trainingdata2)
+summary(model2)
+
+#Looking at population only and its effect in the model
+model3<-lm(GHG_without_LUCF~ population, data=trainingdata1)
+summary(model3)
+
+#Looking at GDP only and its effect in the model
+model4<-lm(GHG_without_LUCF~GDP,data=trainingdata1)
+summary(model4)
+
+#Took out the variables that are highly correlated per VIF>5
+model5<-lm(GHG_without_LUCF~Country_Name+population+age_dependency_ratio+ GDP+life_expectancy+natural_resources_rents,data=trainingdata1)
+summary(model5)
+
+#Global pop and Global GHG
+model6 <-lm(Global_GHG~Global_population,data=data5)
+summary(model6)
+
+#Only GDP and pop
+model7 <-lm(GHG_without_LUCF~GDP+population,data=trainingdata1)
+summary(model7)
+
+#Only Country_Name
+model8 <-lm(GHG_without_LUCF~Country_Name, data=trainingdata1)
+summary(model8)
+
+#Removed highly correlated variables for model with Country_Name
+model9 <- lm(GHG_without_LUCF~GDP+population+agricultural_land+natural_resources_rents+energy_consumption_per_capita+deaths_air_pollute, data=trainingdata1)
+summary(model9)
+```
+
+Based on the linear regression models for the above, it looks like GHG_without_LUCF has a slightly higher R2 value and lower RSE.
+
+Cross Validation Steps (From ISYE6501 notes): 1. Split the whole dataset into 2 distinct sets: train data and test data (The ratio we are using is 80:20) 
+2. Perform Cross-Validation with K of your choice for all of the models on train data and pick the best one. For the cross-validation, you are splitting train data into k different pieces and making k different models using the same hyperparameters (e.g,. C or k), but different subsets of training data giving you different model parameters (e.g., polynomial coefficients and intercepts) 
+3. Train the chosen model on ALL of train data to find model parameters 
+4. Report the picked model's accuracy as its performance on test data
+
+```{r}
+#GHG without LUCF (model1) 10-Fold Cross Validation
+
+#Defining training control as cross-validation and k=10
+train_control <- trainControl(method = "cv",number = 10, savePredictions = TRUE)
+
+#Assign GHG without LUCF as independent variable
+set.seed(1)
+model1cv <- train(GHG_without_LUCF~., data = trainingdata1,
+               method = "lm",
+               trControl = train_control)
+#Print performance metrics of cross-validated model
+print(model1cv)
+```
+
+```{r}
+#GHG without LUCF (model1a) 10-Fold Cross Validation
+
+#Defining training control as cross-validation and k=10
+train_control <- trainControl(method = "cv",number = 10, savePredictions = TRUE)
+
+#Assign GHG without LUCF as independent variable
+set.seed(1)
+model1acv <- train(GHG_without_LUCF~Country_Name+age_dependency_ratio+agricultural_land+fertility_rate+GDP+life_expectancy+natural_resources_rents+energy_consumption_per_capita+population+deaths_air_pollute, data = trainingdata1,
+               method = "lm",
+               trControl = train_control)
+#Print performance metrics of cross-validated model
+print(model1acv)
+```
+
+```{r}
+#GHG without LUCF (model1b) 10-Fold Cross Validation
+
+#Defining training control as cross-validation and k=10
+train_control <- trainControl(method = "cv",number = 10, savePredictions = TRUE)
+
+#Assign GHG without LUCF as independent variable
+set.seed(1)
+model1bcv <- train(GHG_without_LUCF~age_dependency_ratio+agricultural_land+fertility_rate+GDP+labor_force+life_expectancy+natural_resources_rents+energy_consumption_per_capita+population+deaths_air_pollute, data = trainingdata1,
+               method = "lm",
+               trControl = train_control)
+#Print performance metrics of cross-validated model
+print(model1bcv)
+```
+
+
+
+```{r}
+#GHG with LUCF (model2) 10-Fold Cross Validation
+
+#Assign GHG with LUCF as independent variable
+set.seed(1)
+model2cv<-train(GHG_with_LUCF ~., data = trainingdata2,
+               method = "lm",
+               trControl = train_control)
+
+#Print performance metrics of cross-validated model
+print(model2cv)
+```
+
+```{r}
+#GHG with LUCF (model3) 10-Fold Cross Validation
+
+#Assign GHG with LUCF as independent variable
+set.seed(1)
+model3cv<-train(GHG_without_LUCF ~ population, data = trainingdata1,
+               method = "lm",
+               trControl = train_control)
+
+#Print performance metrics of cross-validated model
+print(model3cv)
+```
+
+```{r}
+#GHG with LUCF (model4) 10-Fold Cross Validation
+
+#Assign GHG with LUCF as independent variable
+set.seed(1)
+model4cv<-train(GHG_without_LUCF~GDP,data = trainingdata1,
+               method = "lm",
+               trControl = train_control)
+
+#Print performance metrics of cross-validated model
+print(model4cv)
+```
+
+```{r}
+#GHG with LUCF (model5) 10-Fold Cross Validation
+
+#Assign GHG with LUCF as independent variable
+set.seed(1)
+model5cv<-train(GHG_without_LUCF~Country_Name+population+age_dependency_ratio+GDP+life_expectancy+natural_resources_rents,data = trainingdata1,
+               method = "lm",
+               trControl = train_control)
+
+#Print performance metrics of cross-validated model
+print(model5cv)
+```
+
+
+```{r}
+#GHG with LUCF (model7) 10-Fold Cross Validation
+
+#Assign GHG with LUCF as independent variable
+set.seed(1)
+model7cv<-train(GHG_without_LUCF~population+GDP,data = trainingdata1,
+               method = "lm",
+               trControl = train_control)
+
+#Print performance metrics of cross-validated model
+print(model7cv)
+```
+
+```{r}
+#GHG with LUCF (model8) 10-Fold Cross Validation
+
+#Assign GHG with LUCF as independent variable
+set.seed(1)
+model8cv<-train(GHG_without_LUCF~Country_Name,data = trainingdata1,
+               method = "lm",
+               trControl = train_control)
+
+#Print performance metrics of cross-validated model
+print(model8cv)
+```
+
+```{r}
+#GHG with LUCF (model9) 10-Fold Cross Validation
+
+#Assign GHG with LUCF as independent variable
+set.seed(1)
+model9cv<-train(GHG_without_LUCF~GDP+population+agricultural_land+natural_resources_rents+energy_consumption_per_capita+deaths_air_pollute,data = trainingdata1,
+               method = "lm",
+               trControl = train_control)
+
+#Print performance metrics of cross-validated model
+print(model9cv)
+```
+
+The models appear to have very high R2 values, which can indicate overfitting or multicollinearity. As such, we looked at the VIF for the model to determine if our independent variables are highly correlated:
+
+```{r}
+#Look at VIF for multicollinearity:
+vif(model1)
+vif(model1b)
+```
+
+Per these VIF results, it looks like labor force and population are highly correlated factors (Scaled GVIF&(1/(2\*Df))\>10) and some others like age dependency, agricultural land, fertility rate, life expectancy, energy consumption per capita and deaths from air pollution are correlated (GVIF>5).
+
+Based on the cross-validations RMSE and R2 values of these two models, linear regression model 9 is better. As such, going forward we will use model1.
+
+```{r}
+#Chosen Model performance metric
+options(scipen=999)
+#make predictions for this model using test data
+pred1 <-predict(model9,testingdata1[-c(12)])
+postResample(pred1, testingdata1$GHG_without_LUCF)
+
+#Chosen Model summary on full dataset
+options(scipen=0)
+chosenmodel<-lm(GHG_without_LUCF~GDP+population+agricultural_land+natural_resources_rents+energy_consumption_per_capita+deaths_air_pollute,data = GHGdata)
+summary(chosenmodel)
+```
+Variable reduction: Lasso, Ridge and PCA:
+
+```{r}
+#Lasso regression
+options(scipen=999)
+#Cross-validate to find Lambda
+cvlasso<-cv.glmnet(x=data.matrix(train1x), y=data.matrix(train1y), type.measure="mse",family="gaussian", alpha=1, nfolds=5)
+best_lambda <- cvlasso$lambda.min
+best_lambda
+
+#create lasso model
+set.seed(1)
+lasso_model <- glmnet(x=data.matrix(train1x), y=data.matrix(train1y), alpha = 1, lambda = best_lambda)
+coef(lasso_model)
+
+#make predictions for this lasso model using test data
+predictions1 <- predict(lasso_model, newx=data.matrix(test1x))
+postResample(predictions1, test1y)
+```
+
+The lasso model for GHG without LUCF selected all variables.
+
+```{r}
+#PCA analysis
+PCAmodel <- prcomp(trainingdata1[-c(1,12)], center=TRUE, scale = TRUE)
+summary(PCAmodel)
+model1scree<-screeplot(PCAmodel,main="Scree Plot",type="line", col="blue")
+```
+
+Per the Kaiser rule, we should pick PC's with eigenvalues of at least one. As such, based on the scree plot above, the first three Principal Components should be sufficient for our prediction. At PC4 and beyond, the graph flattens out and appears to be less than 1 eigenvalue.
+
+```{r}
+#Combine PCA data with dependent variable and create new lm model
+set.seed(1)
+GHGdatapcs <- as.data.frame(cbind(PCAmodel$x[,1:3],trainingdata1[,12]))
+head(GHGdatapcs)
+
+#Create PCA regression model
+PCAregmodel<- lm(V4~., data=GHGdatapcs, )
+summary(PCAregmodel)
+```
+
+```{r}
+#Make predictions with PCA model and calculate performance with test data
+options(scipen=999)
+pred1<-data.frame(predict(PCAmodel,(testingdata1[-c(1,12)])))
+PCApredictions <- predict(PCAregmodel, pred1)
+postResample(PCApredictions, testingdata1$GHG_without_LUCF)
+```
+
+

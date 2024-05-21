@@ -1,0 +1,98 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+
+```{r}
+library(readr)
+
+library(dplyr)
+```
+
+```{r}
+
+urlfile <- "https://github.gatech.edu/raw/MGT-6203-Spring-2023-Canvas/Team-64/main/Data/combined4.csv?token=GHSAT0AAAAAAAACUHHC5V2WLHTKJJACXETAZA3KMPQ"
+
+data <- read.csv(url(urlfile))
+
+
+```
+
+```{r}
+#adding column GHG over population
+
+data <- data %>%
+  mutate(GHG_over_pop = Total.including.LUCF / population)
+
+
+```
+
+```{r}
+
+write.csv(data, "combined5.csv")
+
+```
+
+```{r}
+#EDA on population
+
+library(ggplot2)
+
+ggplot(data) +
+  geom_histogram(mapping = aes(x = population), boundary = 0)
+
+
+```
+
+```{r}
+
+high_pop <- which(data$population > 3000000000)
+
+print(data[high_pop,])
+
+#no actual countries over 300000000, just categories such as 'Lower middle income'
+
+```
+
+```{r}
+
+ggplot(data, aes(x = GHG_over_pop)) +
+  geom_histogram(boundary = 0)
+
+```
+
+```{r}
+
+ggplot(data, aes(x = Total.including.LUCF)) +
+  geom_histogram(boundary = 0)
+
+```
+
+```{r}
+
+high_GHG <- which(data$Total.including.LUCF > 20000000000)
+
+print(data[high_GHG,])
+
+#are all world values for GHG, we should probably take these out
+
+```
+
+```{r}
+
+neg_GHG <- which(data$Total.including.LUCF < 0)
+
+print(data[neg_GHG,])
+
+```
+
+```{r}
+#should remove all "Country Names" that are not countries but instead areas / territories / groups?
+
+unique(data$Country.Name)
+
+```
+
+

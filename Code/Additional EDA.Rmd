@@ -1,0 +1,181 @@
+---
+title: "EDA - Section 1"
+output: html_document
+date: "2023-03-28"
+---
+
+```{r}
+library(ggplot2)
+#everything in data7 is being stored as a character so will have to change that
+```
+
+```{r}
+#age_dependency_ratio, expresses relationship between 3 age groups within population
+
+age_depend <- as.numeric(data7$age_dependency_ratio)
+summary(age_depend)
+
+```
+```{r}
+percent_na_age_depend <- 1581 / length(age_depend) #20% NAs
+
+print(percent_na_age_depend)
+
+hist(age_depend)
+
+```
+
+```{r}
+#agricultural_land, what is the unit of this?
+
+ag_land <- as.numeric(data7$agricultural_land)
+summary(ag_land)
+```
+
+```{r}
+percent_na_ag_land <- 1848 / 7990 #23% NAs
+print(percent_na_ag_land)
+
+hist(ag_land)
+```
+
+```{r}
+#air_transport, what is the unit of this?
+
+air_transport <- as.numeric(data7$air_transport)
+summary(air_transport)
+```
+
+```{r}
+percent_na_air_transport <- 3614 / 7990 #45% NAs
+print(percent_na_air_transport)
+
+hist(air_transport, breaks=20)
+
+#with 45% NAs and most values in same histogram section, probably shouldnt use
+```
+
+```{r}
+#airline_travel, what is the unit of this?
+
+airline_travel <- as.numeric(data7$airline_travel)
+summary(airline_travel)
+```
+
+```{r}
+percent_na_airline_travel <- 3414 / 7990 #42% NAs
+print(percent_na_airline_travel)
+
+hist(airline_travel)
+
+#42% NA probably shouldnt use
+```
+
+```{r}
+#birth rate
+
+birth_rate <- as.numeric(data7$birth_rate)
+summary(birth_rate)
+
+```
+
+```{r}
+percent_na_birth_rate <- 1811 / 7990 #23% NAs
+
+print(percent_na_birth_rate)
+
+hist(birth_rate)
+```
+
+```{r}
+#exports
+
+exports <- as.numeric(data7$exports)
+summary(exports)
+
+```
+
+```{r}
+percent_na_exports <- 2847 / 7990 #36% NAs
+
+print(percent_na_exports)
+
+hist(exports)
+#obvious ouliers and 36% NA, unsure
+```
+
+```{r}
+#fertility rate
+
+fertility <- as.numeric(data7$fertility_rate)
+summary(fertility)
+
+```
+
+```{r}
+percent_na_fertility <- 1947 / 7990 #24% NAs
+
+print(percent_na_fertility)
+
+hist(fertility)
+```
+
+```{r}
+#gdp_current
+
+gdp_current <- as.numeric(data7$gdp_current)
+summary(gdp_current)
+
+```
+
+```{r}
+percent_na_gdp_current <- 2065 / 7990 #26% NAs
+
+print(percent_na_gdp_current)
+
+hist(gdp_current)
+```
+
+```{r}
+EDA_table <- data.frame(data7$population, data7$Total.including.LUCF, ag_land, age_depend, air_transport, airline_travel, birth_rate, exports, fertility, gdp_current)
+```
+
+```{r}
+library(GGally)
+```
+
+```{r}
+ggpairs(EDA_table)
+```
+
+```{r}
+na_ag <- unique(data7$Country_Name[which(is.na(ag_land))])
+na_age <- unique(data7$Country_Name[which(is.na(age_depend))])
+na_air_trans <- unique(data7$Country_Name[which(is.na(air_transport))])
+na_air_trav <- unique(data7$Country_Name[which(is.na(airline_travel))])
+na_birth <- unique(data7$Country_Name[which(is.na(birth_rate))])
+na_export <- unique(data7$Country_Name[which(is.na(exports))])
+na_fertility <- unique(data7$Country_Name[which(is.na(fertility))])
+na_gdp_cur <- unique(data7$Country_Name[which(is.na(gdp_current))])
+```
+
+```{r}
+NA_countries <- data.frame(na_ag, na_age, na_air_trans, na_air_trav, na_birth, na_export, na_fertility, na_gdp_cur)
+```
+
+```{r}
+na_ag_count <- data7$Country_Name[which(is.na(ag_land))]
+na_age_count <- data7$Country_Name[which(is.na(age_depend))]
+na_air_trans_count <- data7$Country_Name[which(is.na(air_transport))]
+na_air_trav_count <- data7$Country_Name[which(is.na(airline_travel))]
+na_birth_count <- data7$Country_Name[which(is.na(birth_rate))]
+na_export_count <- data7$Country_Name[which(is.na(exports))]
+na_fertility_count <- data7$Country_Name[which(is.na(fertility))]
+na_gdp_cur_count <- data7$Country_Name[which(is.na(gdp_current))]
+```
+
+```{r}
+table(na_ag_count)
+```
+
+

@@ -1,0 +1,38 @@
+urlfile <- "https://github.gatech.edu/raw/MGT-6203-Spring-2023-Canvas/Team-64/main/Data/combined8.csv?token=GHSAT0AAAAAAAACU3MWOPMN7N6XEOSMOOWCZBBY2SA"
+data <- read.csv(url(urlfile))
+
+head(data)
+
+#EDA on government expenditure on education
+library(ggplot2)
+
+colnames(data)[21] ="Govt_Exp_Edu"
+
+head(data)
+ggplot(data, aes(x = as.numeric(Govt_Exp_Edu))) +
+  geom_histogram(boundary = 0)
+  
+  
+#EDA on vehicle data
+ggplot(data, aes(x = as.numeric(battery_electric_share))) +
+  geom_histogram(boundary = 0)
+
+ggplot(data, aes(x = as.numeric(plugin_hybrid_share))) +
+  geom_histogram(boundary = 0)
+
+ggplot(data, aes(x = as.numeric(battery_electric_number))) +
+  geom_histogram(boundary = 0)
+
+ggplot(data, aes(x = as.numeric(plugin_hybrid_number))) +
+  geom_histogram(boundary = 0)
+
+ggplot(data, aes(x = as.numeric(full_mild_hybrid_number))) +
+  geom_histogram(boundary = 0)
+
+ggplot(data, aes(x = as.numeric(petrol_number))) +
+  geom_histogram(boundary = 0)
+  
+  
+#The data for vehicles (battery_electric_share - diesel_gas) is pretty limited here, only 289 data entries for over 7900 rows (mainly pertaining to European countries). This is only 3% of valid data of the whole dataset. Should compare after removing countries without sufficient data to see if these variables are worth keeping
+
+filtereddata<- data %>% filter(data$battery_electric_share!="void" & data$battery_electric_share!="")
